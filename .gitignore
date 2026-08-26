@@ -1,0 +1,17 @@
+# frontend (web/)
+web/node_modules
+web/dist
+web/dist-ssr
+web/*.local
+
+# backend (server/)
+server/bin
+server/*.exe
+
+# tooling
+.firecrawl
+.DS_Store
+*.log
+
+# separate project, not part of this monorepo
+my-shell/
