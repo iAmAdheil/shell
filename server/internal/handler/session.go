@@ -120,14 +120,14 @@ func JoinSession(sessions *session.Store, accounts account.Store) gin.HandlerFun
 		go writeToBrowser(conn, out, done)
 
 		sendTerminal(out, s.Scrollback())
-		leave := s.Join(
+		member := s.Join(
 			session.Watcher{ID: me.ID, Name: me.Identity.Name, AvatarURL: me.Identity.AvatarURL},
 			func(b []byte) { sendTerminal(out, append([]byte(nil), b...)) },
 			func(roster []session.Watcher) { sendRoster(out, roster) },
 		)
-		defer leave()
+		defer member.Leave()
 
-		readFromBrowser(conn, s)
+		readFromBrowser(conn, s, member)
 	}
 }
 
@@ -184,7 +184,7 @@ func writeToBrowser(conn *websocket.Conn, out <-chan frame, done <-chan struct{}
 
 // readFromBrowser passes keystrokes to the shell and applies resize messages.
 // It returns when the User disconnects.
-func readFromBrowser(conn *websocket.Conn, s *session.Session) {
+func readFromBrowser(conn *websocket.Conn, s *session.Session, member *session.Membership) {
 	conn.SetReadLimit(maxInputMsg)
 	conn.SetReadDeadline(time.Now().Add(pongWait))
 	conn.SetPongHandler(func(string) error {
@@ -207,8 +207,10 @@ func readFromBrowser(conn *websocket.Conn, s *session.Session) {
 			if err := json.Unmarshal(data, &msg); err != nil {
 				continue // Ignore a message this server does not understand.
 			}
-			if msg.Type == "resize" && msg.Rows > 0 && msg.Cols > 0 {
-				if err := s.Resize(msg.Rows, msg.Cols); err != nil {
+			if msg.Type == "resize" {
+				// This is one User's own viewport, not the shell's size. The
+				// Session works out the size that fits everyone.
+				if err := member.Resize(msg.Rows, msg.Cols); err != nil {
 					log.Printf("resize session %s: %v", s.Code, err)
 				}
 			}

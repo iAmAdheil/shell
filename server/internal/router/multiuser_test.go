@@ -1,6 +1,7 @@
 package router_test
 
 import (
+	"encoding/json"
 	"net/http"
 	"reflect"
 	"strings"
@@ -201,4 +202,54 @@ func TestTheRosterNamesUsersByTheirAccountNotANickname(t *testing.T) {
 	if got.Users[0].ID == "" {
 		t.Error("roster entry has no account ID")
 	}
+}
+
+// sendResize tells the server how big one User's own viewport is.
+func sendResize(t *testing.T, conn *websocket.Conn, rows, cols int) {
+	t.Helper()
+
+	msg, err := json.Marshal(map[string]any{"type": "resize", "rows": rows, "cols": cols})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+		t.Fatalf("write resize: %v", err)
+	}
+}
+
+func TestTheSharedShellFitsTheSmallestConnectedViewport(t *testing.T) {
+	h := newHarness(t)
+	adaCookie := h.logIn(t)
+	code := h.createSession(t, adaCookie)
+	adaConn := h.connect(t, code, adaCookie)
+	graceConn := h.connect(t, code, h.logInAs(t, grace))
+
+	sendResize(t, adaConn, 50, 200)
+	sendResize(t, graceConn, 30, 100)
+
+	waitFor(t, "the shell to fit Grace's smaller window", func() bool {
+		rows, cols := h.shells.Last().Size()
+		return rows == 30 && cols == 100
+	})
+}
+
+func TestTheSharedShellGrowsWhenTheSmallestUserLeaves(t *testing.T) {
+	h := newHarness(t)
+	adaCookie := h.logIn(t)
+	code := h.createSession(t, adaCookie)
+	adaConn := h.connect(t, code, adaCookie)
+	graceConn := h.connect(t, code, h.logInAs(t, grace))
+	sendResize(t, adaConn, 50, 200)
+	sendResize(t, graceConn, 30, 100)
+	waitFor(t, "the shell to fit both windows", func() bool {
+		rows, cols := h.shells.Last().Size()
+		return rows == 30 && cols == 100
+	})
+
+	graceConn.Close()
+
+	waitFor(t, "the shell to grow back to Ada's window", func() bool {
+		rows, cols := h.shells.Last().Size()
+		return rows == 50 && cols == 200
+	})
 }

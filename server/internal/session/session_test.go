@@ -139,8 +139,7 @@ func TestAConnectedUserSeesLiveOutput(t *testing.T) {
 	}
 
 	seen := make(chan []byte, 8)
-	leave := s.Join(ada, func(b []byte) { seen <- append([]byte(nil), b...) }, func([]session.Watcher) {})
-	defer leave()
+	defer s.Join(ada, func(b []byte) { seen <- append([]byte(nil), b...) }, func([]session.Watcher) {}).Leave()
 
 	runner.Last().Say("live output")
 
@@ -215,8 +214,7 @@ func TestASessionEndsWhenItsLastWatcherLeaves(t *testing.T) {
 	}
 	sh := runner.Last()
 
-	leave := s.Join(ada, func([]byte) {}, func([]session.Watcher) {})
-	leave()
+	s.Join(ada, func([]byte) {}, func([]session.Watcher) {}).Leave()
 
 	waitFor(t, "the container to be destroyed", sh.IsClosed)
 	if _, ok := store.ByCode(s.Code); ok {
@@ -233,8 +231,8 @@ func TestASessionSurvivesWhileOneWatcherRemains(t *testing.T) {
 	sh := runner.Last()
 
 	leaveFirst := s.Join(ada, func([]byte) {}, func([]session.Watcher) {})
-	defer s.Join(grace, func([]byte) {}, func([]session.Watcher) {})()
-	leaveFirst()
+	defer s.Join(grace, func([]byte) {}, func([]session.Watcher) {}).Leave()
+	leaveFirst.Leave()
 
 	if sh.IsClosed() {
 		t.Error("the Session ended while a watcher was still connected")

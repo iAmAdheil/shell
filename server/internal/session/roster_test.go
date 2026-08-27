@@ -51,7 +51,7 @@ func TestAJoiningUserIsOnTheRoster(t *testing.T) {
 	}
 
 	spy := &rosterSpy{}
-	defer s.Join(ada, func([]byte) {}, spy.record)()
+	defer s.Join(ada, func([]byte) {}, spy.record).Leave()
 
 	waitFor(t, "Ada to appear on the roster", func() bool {
 		return reflect.DeepEqual(names(spy.latest()), []string{"Ada Lovelace"})
@@ -66,9 +66,9 @@ func TestEveryWatcherIsToldWhenSomeoneJoins(t *testing.T) {
 	}
 
 	adaSpy := &rosterSpy{}
-	defer s.Join(ada, func([]byte) {}, adaSpy.record)()
+	defer s.Join(ada, func([]byte) {}, adaSpy.record).Leave()
 	graceSpy := &rosterSpy{}
-	defer s.Join(grace, func([]byte) {}, graceSpy.record)()
+	defer s.Join(grace, func([]byte) {}, graceSpy.record).Leave()
 
 	both := []string{"Ada Lovelace", "Grace Hopper"}
 	waitFor(t, "Ada to be told Grace arrived", func() bool {
@@ -87,10 +87,10 @@ func TestLeavingTakesAUserOffTheRoster(t *testing.T) {
 	}
 
 	adaSpy := &rosterSpy{}
-	defer s.Join(ada, func([]byte) {}, adaSpy.record)()
+	defer s.Join(ada, func([]byte) {}, adaSpy.record).Leave()
 	graceLeaves := s.Join(grace, func([]byte) {}, func([]session.Watcher) {})
 
-	graceLeaves()
+	graceLeaves.Leave()
 
 	waitFor(t, "Grace to drop off Ada's roster", func() bool {
 		return reflect.DeepEqual(names(adaSpy.latest()), []string{"Ada Lovelace"})
@@ -105,8 +105,8 @@ func TestOneUserWithTwoTabsIsListedOnce(t *testing.T) {
 	}
 
 	spy := &rosterSpy{}
-	defer s.Join(ada, func([]byte) {}, spy.record)()
-	defer s.Join(ada, func([]byte) {}, func([]session.Watcher) {})()
+	defer s.Join(ada, func([]byte) {}, spy.record).Leave()
+	defer s.Join(ada, func([]byte) {}, func([]session.Watcher) {}).Leave()
 
 	waitFor(t, "Ada to be listed once, not twice", func() bool {
 		return reflect.DeepEqual(names(spy.latest()), []string{"Ada Lovelace"})
@@ -121,11 +121,11 @@ func TestClosingOneOfTwoTabsKeepsTheUserOnTheRoster(t *testing.T) {
 	}
 
 	spy := &rosterSpy{}
-	defer s.Join(grace, func([]byte) {}, spy.record)()
+	defer s.Join(grace, func([]byte) {}, spy.record).Leave()
 	closeOneTab := s.Join(ada, func([]byte) {}, func([]session.Watcher) {})
-	defer s.Join(ada, func([]byte) {}, func([]session.Watcher) {})()
+	defer s.Join(ada, func([]byte) {}, func([]session.Watcher) {}).Leave()
 
-	closeOneTab()
+	closeOneTab.Leave()
 
 	waitFor(t, "Ada to stay on the roster with one tab still open", func() bool {
 		return reflect.DeepEqual(names(spy.latest()), []string{"Ada Lovelace", "Grace Hopper"})
@@ -141,9 +141,9 @@ func TestTheRosterIsInTheSameOrderForEveryone(t *testing.T) {
 
 	// Join out of alphabetical order. Everyone must still see one order.
 	graceSpy := &rosterSpy{}
-	defer s.Join(grace, func([]byte) {}, graceSpy.record)()
+	defer s.Join(grace, func([]byte) {}, graceSpy.record).Leave()
 	adaSpy := &rosterSpy{}
-	defer s.Join(ada, func([]byte) {}, adaSpy.record)()
+	defer s.Join(ada, func([]byte) {}, adaSpy.record).Leave()
 
 	want := []string{"Ada Lovelace", "Grace Hopper"}
 	waitFor(t, "both Users to see the same roster order", func() bool {

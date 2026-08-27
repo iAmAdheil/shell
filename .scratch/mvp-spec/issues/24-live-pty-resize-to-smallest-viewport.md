@@ -4,9 +4,14 @@
 
 **Blocked by:** 22
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] With two Users connected at different viewport sizes, the shared PTY is sized to the smaller of the two.
-- [ ] When the User with the smaller viewport disconnects, the PTY resizes live to match the next-smallest remaining viewport.
-- [ ] When any connected User resizes their browser window, the PTY resizes live if their new size changes which viewport is smallest.
-- [ ] A newly joining User with a smaller viewport than everyone else already connected triggers an immediate PTY resize down to their size.
+- [x] With two Users connected at different viewport sizes, the shared PTY is sized to the smaller of the two.
+- [x] When the User with the smaller viewport disconnects, the PTY resizes live to match the next-smallest remaining viewport.
+- [x] When any connected User resizes their browser window, the PTY resizes live if their new size changes which viewport is smallest.
+- [x] A newly joining User with a smaller viewport than everyone else already connected triggers an immediate PTY resize down to their size.
+
+**Note on "smallest":** rows and columns are taken separately. A short wide
+window and a tall narrow one have no "smaller" between them, and the output
+still has to fit both, so the shell gets the fewest rows anyone has and the
+fewest columns anyone has.

@@ -49,10 +49,23 @@ type Watcher struct {
 
 // watch is one open browser tab. A User with two tabs open has two of these
 // but appears on the roster once.
+//
+// rows and cols are that tab's viewport. They stay zero until the browser
+// reports a size, and a zero size is left out of the shared size.
 type watch struct {
 	who      Watcher
 	onOutput func([]byte)
 	onRoster func([]Watcher)
+	rows     uint16
+	cols     uint16
+}
+
+// Membership is one connected browser tab, from the caller's side. Resize
+// reports that tab's viewport, and Leave disconnects it.
+type Membership struct {
+	session *Session
+	id      int
+	once    sync.Once
 }
 
 // Session is one shared shell.
@@ -190,11 +203,6 @@ func (s *Session) Type(p []byte) error {
 	return err
 }
 
-// Resize sets the shell's terminal size.
-func (s *Session) Resize(rows, cols uint16) error {
-	return s.shell.Resize(rows, cols)
-}
-
 // Scrollback returns everything the shell has printed so far. A User who joins
 // late is shown all of it (CONTEXT.md).
 func (s *Session) Scrollback() []byte {
@@ -209,7 +217,7 @@ func (s *Session) Scrollback() []byte {
 //
 // The returned function is how the User leaves. A Session ends the moment its
 // last User goes (CONTEXT.md), so the last call to it destroys the container.
-func (s *Session) Join(who Watcher, onOutput func([]byte), onRoster func([]Watcher)) func() {
+func (s *Session) Join(who Watcher, onOutput func([]byte), onRoster func([]Watcher)) *Membership {
 	s.mu.Lock()
 	id := s.nextWatch
 	s.nextWatch++
@@ -218,22 +226,79 @@ func (s *Session) Join(who Watcher, onOutput func([]byte), onRoster func([]Watch
 	s.mu.Unlock()
 
 	s.announceRoster()
+	return &Membership{session: s, id: id}
+}
 
-	var once sync.Once
-	return func() {
-		once.Do(func() {
-			s.mu.Lock()
-			delete(s.watches, id)
-			last := len(s.watches) == 0 && !s.ended
-			s.mu.Unlock()
-
-			if last {
-				s.store.End(s.Code)
-				return
-			}
-			s.announceRoster()
-		})
+// Resize reports how big this tab's viewport is. The shared shell is then
+// sized to fit every connected viewport.
+func (m *Membership) Resize(rows, cols uint16) error {
+	if rows == 0 || cols == 0 {
+		return nil
 	}
+
+	s := m.session
+	s.mu.Lock()
+	w, ok := s.watches[m.id]
+	if ok {
+		w.rows, w.cols = rows, cols
+		s.watches[m.id] = w
+	}
+	s.mu.Unlock()
+
+	if !ok {
+		return nil
+	}
+	return s.fitShell()
+}
+
+// Leave disconnects this tab. The Session ends when the last one leaves
+// (CONTEXT.md). Calling it twice is safe.
+func (m *Membership) Leave() {
+	m.once.Do(func() {
+		s := m.session
+
+		s.mu.Lock()
+		delete(s.watches, m.id)
+		last := len(s.watches) == 0 && !s.ended
+		s.mu.Unlock()
+
+		if last {
+			s.store.End(s.Code)
+			return
+		}
+
+		s.announceRoster()
+		_ = s.fitShell()
+	})
+}
+
+// fitShell sizes the one shared shell so its output fits inside every
+// connected viewport: the fewest rows anyone has, and the fewest columns
+// anyone has (ticket 07).
+//
+// Each dimension is taken separately, because a short wide window and a tall
+// narrow one have no "smaller" between them, and output still has to fit both.
+func (s *Session) fitShell() error {
+	s.mu.Lock()
+	var rows, cols uint16
+	for _, w := range s.watches {
+		if w.rows == 0 || w.cols == 0 {
+			continue // This tab has not reported a size yet.
+		}
+		if rows == 0 || w.rows < rows {
+			rows = w.rows
+		}
+		if cols == 0 || w.cols < cols {
+			cols = w.cols
+		}
+	}
+	ended := s.ended
+	s.mu.Unlock()
+
+	if ended || rows == 0 || cols == 0 {
+		return nil
+	}
+	return s.shell.Resize(rows, cols)
 }
 
 // Roster is who is connected right now, in one stable order so that every
