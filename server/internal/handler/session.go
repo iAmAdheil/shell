@@ -122,7 +122,7 @@ func JoinSession(sessions *session.Store, accounts account.Store) gin.HandlerFun
 		sendTerminal(out, s.Scrollback())
 		member := s.Join(
 			session.Watcher{ID: me.ID, Name: me.Identity.Name, AvatarURL: me.Identity.AvatarURL},
-			func(b []byte) { sendTerminal(out, append([]byte(nil), b...)) },
+			func(b []byte) { sendTerminal(out, b) },
 			func(roster []session.Watcher) { sendRoster(out, roster) },
 		)
 		defer member.Leave()

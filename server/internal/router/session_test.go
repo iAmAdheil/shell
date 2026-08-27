@@ -337,3 +337,44 @@ func TestCheckingACodeNeedsALogin(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
 	}
 }
+
+// The browser sends the auth cookie on a WebSocket automatically, so without
+// an Origin check another site could open a Session as a logged-in User.
+
+func TestASocketFromAnotherSiteIsRefused(t *testing.T) {
+	h := newHarness(t)
+	authCookie := h.logIn(t)
+	code := h.createSession(t, authCookie)
+
+	url := "ws" + strings.TrimPrefix(h.server.URL, "http") + "/api/sessions/" + code + "/ws"
+	header := http.Header{
+		"Cookie": {authCookie.Name + "=" + authCookie.Value},
+		"Origin": {"http://evil.test"},
+	}
+	conn, resp, err := websocket.DefaultDialer.Dial(url, header)
+
+	if err == nil {
+		conn.Close()
+		t.Fatal("a socket from another site was accepted")
+	}
+	if resp == nil || resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("status = %v, want %d", resp, http.StatusForbidden)
+	}
+}
+
+func TestASocketFromTheSiteItselfIsAccepted(t *testing.T) {
+	h := newHarness(t)
+	authCookie := h.logIn(t)
+	code := h.createSession(t, authCookie)
+
+	url := "ws" + strings.TrimPrefix(h.server.URL, "http") + "/api/sessions/" + code + "/ws"
+	header := http.Header{
+		"Cookie": {authCookie.Name + "=" + authCookie.Value},
+		"Origin": {h.server.URL},
+	}
+	conn, _, err := websocket.DefaultDialer.Dial(url, header)
+	if err != nil {
+		t.Fatalf("the site's own socket was refused: %v", err)
+	}
+	conn.Close()
+}

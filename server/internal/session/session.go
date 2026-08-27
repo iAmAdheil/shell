@@ -361,7 +361,12 @@ func (s *Session) reapIfNobodyJoined() {
 }
 
 // broadcast records output and hands it to every watcher.
+// broadcast is given a slice of the read buffer, which the next read
+// overwrites, so it copies before handing the bytes to anyone who may keep
+// them.
 func (s *Session) broadcast(b []byte) {
+	b = append([]byte(nil), b...)
+
 	s.mu.Lock()
 	if s.ended {
 		s.mu.Unlock()
