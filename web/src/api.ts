@@ -19,3 +19,14 @@ export async function logOut(): Promise<void> {
   })
   if (!res.ok) throw new Error(`logout failed: ${res.status}`)
 }
+
+/** Starts a new Session and returns its Session Code. */
+export async function createSession(): Promise<string> {
+  const res = await fetch('/api/sessions', {
+    method: 'POST',
+    credentials: 'same-origin',
+  })
+  if (!res.ok) throw new Error(`could not start a Session: ${res.status}`)
+  const body = (await res.json()) as { code: string }
+  return body.code
+}

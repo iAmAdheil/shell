@@ -2,9 +2,14 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/joho/godotenv"
 
@@ -12,6 +17,8 @@ import (
 	"backend/internal/auth"
 	"backend/internal/login"
 	"backend/internal/router"
+	"backend/internal/session"
+	"backend/internal/shell"
 )
 
 func main() {
@@ -30,16 +37,43 @@ func main() {
 	}
 	defer accounts.Close()
 
+	runner, err := shell.NewDockerRunner()
+	if err != nil {
+		log.Fatalf("docker: %v (is Docker running?)", err)
+	}
+
+	// Sessions live only in this process. Ending them on the way out is what
+	// stops a container outliving the server that started it (ticket 20).
+	sessions := session.NewStore(runner)
+	defer sessions.CloseAll()
+
 	r := router.New(router.Deps{
 		Accounts:   accounts,
 		Logins:     login.NewStore(),
 		Google:     auth.NewGoogleProvider(cfg.googleClientID, cfg.googleClientSecret, cfg.appBaseURL+"/api/auth/google/callback"),
+		Sessions:   sessions,
 		WebBaseURL: cfg.webBaseURL,
 	})
 
-	log.Println("server listening on :8081")
-	if err := r.Run(":8081"); err != nil {
-		log.Fatal(err)
+	srv := &http.Server{Addr: ":8081", Handler: r}
+
+	stopping := make(chan os.Signal, 1)
+	signal.Notify(stopping, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		log.Println("server listening on :8081")
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatal(err)
+		}
+	}()
+
+	<-stopping
+	log.Println("shutting down: ending every Session")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Printf("shutdown: %v", err)
 	}
 }
 

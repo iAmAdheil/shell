@@ -48,3 +48,46 @@
 .button:hover {
   border-color: #646cff;
 }
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.brand {
+  font-weight: 700;
+}
+
+.code {
+  padding: 0.15rem 0.5rem;
+  border: 1px solid #2a2a2a;
+  border-radius: 0.35rem;
+  background: #151515;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.bar .button {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+.terminal {
+  flex: 1;
+  min-height: 0;
+  padding: 0.5rem;
+  background: #0d0d0d;
+}

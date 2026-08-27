@@ -6,7 +6,8 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/api': 'http://localhost:8081',
+      // ws lets the Session terminal socket through, not just plain requests.
+      '/api': { target: 'http://localhost:8081', ws: true },
     },
   },
 })

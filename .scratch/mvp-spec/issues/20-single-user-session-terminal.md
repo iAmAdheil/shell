@@ -4,13 +4,13 @@
 
 **Blocked by:** 19
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] An authenticated User can trigger "New Session" and land in a running terminal within a few seconds.
-- [ ] Visiting the app with no Session Code does not create a Session.
-- [ ] The server spawns one Docker container per Session, running a shell through a PTY.
-- [ ] Keystrokes typed in the browser reach the container's shell; its output renders in the browser through a terminal-emulator library.
-- [ ] The PTY is sized to the User's own viewport at connect time.
-- [ ] Output is kept as Scrollback in server memory for the life of the Session.
-- [ ] When the User disconnects, the server destroys the container and drops the Session and its Scrollback.
-- [ ] A server restart ends every Session; nothing about a Session survives it.
+- [x] An authenticated User can trigger "New Session" and land in a running terminal within a few seconds.
+- [x] Visiting the app with no Session Code does not create a Session.
+- [x] The server spawns one Docker container per Session, running a shell through a PTY.
+- [x] Keystrokes typed in the browser reach the container's shell; its output renders in the browser through a terminal-emulator library.
+- [x] The PTY is sized to the User's own viewport at connect time.
+- [x] Output is kept as Scrollback in server memory for the life of the Session.
+- [x] When the User disconnects, the server destroys the container and drops the Session and its Scrollback.
+- [x] A server restart ends every Session; nothing about a Session survives it.

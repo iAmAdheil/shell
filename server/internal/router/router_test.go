@@ -1,11 +1,13 @@
 package router_test
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -13,7 +15,12 @@ import (
 	"backend/internal/auth"
 	"backend/internal/login"
 	"backend/internal/router"
+	"backend/internal/session"
+	"backend/internal/shell/shelltest"
 )
+
+// settle is how long a test waits for work that crosses a goroutine.
+const settle = 2 * time.Second
 
 var ada = account.Identity{
 	Provider:       "google",
@@ -24,8 +31,10 @@ var ada = account.Identity{
 
 type harness struct {
 	engine   *gin.Engine
+	server   *httptest.Server
 	accounts *fakeAccounts
 	google   *fakeProvider
+	shells   *shelltest.Runner
 }
 
 func newHarness(t *testing.T) *harness {
@@ -34,14 +43,55 @@ func newHarness(t *testing.T) *harness {
 	h := &harness{
 		accounts: newFakeAccounts(),
 		google:   &fakeProvider{identity: ada},
+		shells:   &shelltest.Runner{},
 	}
+
+	sessions := session.NewStore(h.shells)
+	t.Cleanup(sessions.CloseAll)
+
 	h.engine = router.New(router.Deps{
 		Accounts:   h.accounts,
 		Logins:     login.NewStore(),
 		Google:     h.google,
+		Sessions:   sessions,
 		WebBaseURL: "http://web.test",
 	})
+
+	h.server = httptest.NewServer(h.engine)
+	t.Cleanup(h.server.Close)
 	return h
+}
+
+// createSession asks the server for a new Session and returns its Code.
+func (h *harness) createSession(t *testing.T, authCookie *http.Cookie) string {
+	t.Helper()
+
+	rec := h.do(http.MethodPost, "/api/sessions", authCookie)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/sessions = %d, want %d (body %s)", rec.Code, http.StatusCreated, rec.Body)
+	}
+
+	var body struct {
+		Code string `json:"code"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode %s: %v", rec.Body, err)
+	}
+	return body.Code
+}
+
+// waitFor polls until cond holds, or fails the test.
+func waitFor(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+
+	deadline := time.Now().Add(settle)
+	for time.Now().Before(deadline) {
+		if cond() {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for %s", what)
 }
 
 // do sends one request through the router, carrying the given cookies.

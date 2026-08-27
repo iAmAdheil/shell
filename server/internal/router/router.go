@@ -7,6 +7,7 @@ import (
 	"backend/internal/auth"
 	"backend/internal/handler"
 	"backend/internal/login"
+	"backend/internal/session"
 )
 
 // Deps are the collaborators the routes need.
@@ -14,6 +15,7 @@ type Deps struct {
 	Accounts account.Store
 	Logins   *login.Store
 	Google   auth.IdentityProvider
+	Sessions *session.Store
 
 	// WebBaseURL is where a finished login sends the browser back to.
 	WebBaseURL string
@@ -33,6 +35,8 @@ func New(d Deps) *gin.Engine {
 		guarded := api.Group("")
 		guarded.Use(auth.RequireLogin(d.Logins))
 		guarded.GET("/me", handler.Me(d.Accounts))
+		guarded.POST("/sessions", handler.CreateSession(d.Sessions))
+		guarded.GET("/sessions/:code/ws", handler.JoinSession(d.Sessions))
 	}
 
 	return r

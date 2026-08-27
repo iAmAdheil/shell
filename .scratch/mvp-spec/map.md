@@ -27,10 +27,19 @@ An MVP feature spec for Shell: a multiplayer, real-time terminal. Authenticated 
 - [Command safety classifier — research](issues/13-command-safety-classifier-approach.md): six approaches surveyed (Claude Code auto mode, Cursor Auto-review, Codex CLI sandbox+reviewer, Aider manual confirm, pattern/rbash/seccomp mechanisms, local-vs-external-model); no option picked yet — see [18-choose-command-safety-classifier-approach](issues/18-choose-command-safety-classifier-approach.md).
 - [Auth method & session/token mechanism](issues/14-auth-method-and-session-token.md): OAuth only (GitHub + Google), server-side session via HTTP-only cookie (not JWT), long-lived and refreshed on activity.
 
+## Decisions made while implementing (2026-08-27)
+
+- Accounts database: Postgres 18 in docker compose, host port 5433.
+- OAuth providers: Google first; GitHub deferred at the user's request. `auth.IdentityProvider` is the seam GitHub plugs into.
+- The auth record is called a **Login**, not a Session — CONTEXT.md reserves "Session" for the running shell.
+- Per-Session container image: `debian:bookworm-slim`, running `bash`. Limits: 512 MB memory, half a CPU, 256 PIDs. Every container carries the label `com.shell.session`.
+- Session Code format: 8 characters from `abcdefghjkmnpqrstuvwxyz23456789` — URL-safe, and without the characters that are easy to misread when a Code is read aloud or copied.
+- Terminal transport: binary WebSocket frames carry terminal bytes in both directions; JSON text frames carry control messages such as resize.
+- A Session created but never joined is reaped after 60 seconds, so an abandoned container cannot outlive the browser that asked for it.
+
 ## Not yet specified
 
-- Per-Session container image contents (base image, pre-installed tools) and concrete resource limits (CPU/memory/pids/timeout).
-- Session Code format (length, character set) and whether it is embedded in a shareable URL.
+- Whether a Session Code is embedded in a shareable URL, or only typed in.
 - Roster and blocked-command UI treatment (exact placement, wording, visual style).
 - Orphaned-container cleanup if the server crashes or restarts mid-Session.
 
