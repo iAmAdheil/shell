@@ -4,10 +4,10 @@
 
 **Blocked by:** 20
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] An authenticated User can enter a valid, active Session Code and join that Session.
-- [ ] On join, the User's terminal renders the full Scrollback recorded so far, in order.
-- [ ] Keystrokes from every joined User merge into a single input stream sent to the one shared PTY.
-- [ ] Output from the shared shell renders identically, in real time, in every joined User's terminal.
-- [ ] The Session stays open while at least one User is connected; it ends only when the last User disconnects.
+- [x] An authenticated User can enter a valid, active Session Code and join that Session.
+- [x] On join, the User's terminal renders the full Scrollback recorded so far, in order.
+- [x] Keystrokes from every joined User merge into a single input stream sent to the one shared PTY.
+- [x] Output from the shared shell renders identically, in real time, in every joined User's terminal.
+- [x] The Session stays open while at least one User is connected; it ends only when the last User disconnects.

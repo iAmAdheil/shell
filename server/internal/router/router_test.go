@@ -29,6 +29,13 @@ var ada = account.Identity{
 	AvatarURL:      "https://example.test/ada.png",
 }
 
+var grace = account.Identity{
+	Provider:       "google",
+	ProviderUserID: "67890",
+	Name:           "Grace Hopper",
+	AvatarURL:      "https://example.test/grace.png",
+}
+
 type harness struct {
 	engine   *gin.Engine
 	server   *httptest.Server
@@ -105,10 +112,17 @@ func (h *harness) do(method, path string, cookies ...*http.Cookie) *httptest.Res
 	return rec
 }
 
-// logIn runs the whole OAuth flow against the fake provider and returns the
-// auth cookie a real browser would be left holding.
+// logIn signs in as Ada and returns the auth cookie a browser would hold.
 func (h *harness) logIn(t *testing.T) *http.Cookie {
 	t.Helper()
+	return h.logInAs(t, ada)
+}
+
+// logInAs runs the whole OAuth flow against the fake provider, as one person.
+func (h *harness) logInAs(t *testing.T, who account.Identity) *http.Cookie {
+	t.Helper()
+
+	h.google.identity = who
 
 	start := h.do(http.MethodGet, "/api/auth/google/start")
 	state := cookie(t, start, auth.StateCookieName)
