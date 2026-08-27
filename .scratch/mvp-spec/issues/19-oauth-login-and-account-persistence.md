@@ -4,11 +4,11 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done, except GitHub login (deferred by the user on 2026-08-27)
 
-- [ ] A visitor can start a GitHub OAuth login and land back on the app, authenticated.
-- [ ] A visitor can start a Google OAuth login and land back on the app, authenticated.
-- [ ] The first login for a given OAuth identity creates one account record; a repeat login reuses that same record.
-- [ ] The server issues an HTTP-only session cookie on login; protected routes reject requests without a valid cookie.
-- [ ] A logged-in User can log out; the session cookie is cleared and the old cookie is rejected afterward.
-- [ ] The session cookie is long-lived (e.g. 30 days) and refreshes on activity.
+- [ ] A visitor can start a GitHub OAuth login and land back on the app, authenticated. **Deferred.** The provider seam (`auth.IdentityProvider`) is in place, so GitHub is one more implementation of it plus two routes.
+- [x] A visitor can start a Google OAuth login and land back on the app, authenticated.
+- [x] The first login for a given OAuth identity creates one account record; a repeat login reuses that same record.
+- [x] The server issues an HTTP-only session cookie on login; protected routes reject requests without a valid cookie.
+- [x] A logged-in User can log out; the session cookie is cleared and the old cookie is rejected afterward.
+- [x] The session cookie is long-lived (e.g. 30 days) and refreshes on activity.
