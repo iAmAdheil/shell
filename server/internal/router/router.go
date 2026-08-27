@@ -7,6 +7,7 @@ import (
 	"backend/internal/auth"
 	"backend/internal/handler"
 	"backend/internal/login"
+	"backend/internal/observability"
 	"backend/internal/session"
 )
 
@@ -24,6 +25,12 @@ type Deps struct {
 func New(d Deps) *gin.Engine {
 	r := gin.Default()
 
+	// Sentry wraps every route, so a panic in any of them is reported. With no
+	// DSN it would report nothing, so it stays off the chain entirely.
+	if observability.Enabled() {
+		r.Use(observability.Middleware())
+	}
+
 	api := r.Group("/api")
 	{
 		api.GET("/health", handler.Health)
@@ -33,7 +40,7 @@ func New(d Deps) *gin.Engine {
 		api.POST("/auth/logout", auth.Logout(d.Logins))
 
 		guarded := api.Group("")
-		guarded.Use(auth.RequireLogin(d.Logins))
+		guarded.Use(auth.RequireLogin(d.Logins), tagAccount)
 		guarded.GET("/me", handler.Me(d.Accounts))
 		guarded.POST("/sessions", handler.CreateSession(d.Sessions))
 		guarded.GET("/sessions/:code", handler.CheckSession(d.Sessions))
@@ -41,4 +48,10 @@ func New(d Deps) *gin.Engine {
 	}
 
 	return r
+}
+
+// tagAccount names the logged-in Account on every Sentry event from this
+// request. It must run after RequireLogin, which is what finds that Account.
+func tagAccount(c *gin.Context) {
+	observability.SetUser(c, auth.AccountID(c))
 }
