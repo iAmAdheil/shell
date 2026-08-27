@@ -9,6 +9,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -38,6 +39,22 @@ const readChunk = 32 * 1024
 // running with nobody to end it.
 const defaultJoinGrace = 60 * time.Second
 
+// Watcher is one connected User, as the roster shows them. Identity comes
+// from the account they logged in with (ticket 10), never a nickname.
+type Watcher struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	AvatarURL string `json:"avatarUrl"`
+}
+
+// watch is one open browser tab. A User with two tabs open has two of these
+// but appears on the roster once.
+type watch struct {
+	who      Watcher
+	onOutput func([]byte)
+	onRoster func([]Watcher)
+}
+
 // Session is one shared shell.
 type Session struct {
 	Code string
@@ -47,12 +64,12 @@ type Session struct {
 	// store is where this Session removes itself once its last watcher goes.
 	store *Store
 
-	mu          sync.Mutex
-	scrollback  []byte
-	subscribers map[int]func([]byte)
-	nextSub     int
-	joined      bool
-	ended       bool
+	mu         sync.Mutex
+	scrollback []byte
+	watches    map[int]watch
+	nextWatch  int
+	joined     bool
+	ended      bool
 }
 
 // Store holds every running Session, keyed by Session Code.
@@ -84,10 +101,10 @@ func (st *Store) Create(ctx context.Context, rows, cols uint16) (*Session, error
 	}
 
 	s := &Session{
-		Code:        st.freshCode(),
-		shell:       sh,
-		store:       st,
-		subscribers: map[int]func([]byte){},
+		Code:    st.freshCode(),
+		shell:   sh,
+		store:   st,
+		watches: map[int]watch{},
 	}
 
 	st.mu.Lock()
@@ -186,32 +203,84 @@ func (s *Session) Scrollback() []byte {
 	return append([]byte(nil), s.scrollback...)
 }
 
-// Subscribe registers a watcher for live output and returns the function that
-// removes it again.
+// Join connects one User to the Session. onOutput receives live terminal
+// output. onRoster receives the list of connected Users, immediately and again
+// every time it changes.
 //
-// A Session ends the moment its last watcher goes (CONTEXT.md), so the
-// returned function is what destroys the container for the User who leaves
-// last.
-func (s *Session) Subscribe(onOutput func([]byte)) func() {
+// The returned function is how the User leaves. A Session ends the moment its
+// last User goes (CONTEXT.md), so the last call to it destroys the container.
+func (s *Session) Join(who Watcher, onOutput func([]byte), onRoster func([]Watcher)) func() {
 	s.mu.Lock()
-	id := s.nextSub
-	s.nextSub++
-	s.subscribers[id] = onOutput
+	id := s.nextWatch
+	s.nextWatch++
+	s.watches[id] = watch{who: who, onOutput: onOutput, onRoster: onRoster}
 	s.joined = true
 	s.mu.Unlock()
+
+	s.announceRoster()
 
 	var once sync.Once
 	return func() {
 		once.Do(func() {
 			s.mu.Lock()
-			delete(s.subscribers, id)
-			last := len(s.subscribers) == 0 && !s.ended
+			delete(s.watches, id)
+			last := len(s.watches) == 0 && !s.ended
 			s.mu.Unlock()
 
 			if last {
 				s.store.End(s.Code)
+				return
 			}
+			s.announceRoster()
 		})
+	}
+}
+
+// Roster is who is connected right now, in one stable order so that every
+// User sees the same list.
+func (s *Session) Roster() []Watcher {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.rosterLocked()
+}
+
+// rosterLocked collects the distinct Users behind the open tabs. One User with
+// two tabs open is one entry.
+func (s *Session) rosterLocked() []Watcher {
+	seen := make(map[string]Watcher, len(s.watches))
+	for _, w := range s.watches {
+		seen[w.who.ID] = w.who
+	}
+
+	roster := make([]Watcher, 0, len(seen))
+	for _, w := range seen {
+		roster = append(roster, w)
+	}
+	sort.Slice(roster, func(i, j int) bool {
+		if roster[i].Name != roster[j].Name {
+			return roster[i].Name < roster[j].Name
+		}
+		return roster[i].ID < roster[j].ID
+	})
+	return roster
+}
+
+// announceRoster tells every connected User who else is here.
+func (s *Session) announceRoster() {
+	s.mu.Lock()
+	if s.ended {
+		s.mu.Unlock()
+		return
+	}
+	roster := s.rosterLocked()
+	tell := make([]func([]Watcher), 0, len(s.watches))
+	for _, w := range s.watches {
+		tell = append(tell, w.onRoster)
+	}
+	s.mu.Unlock()
+
+	for _, notify := range tell {
+		notify(roster)
 	}
 }
 
@@ -234,9 +303,9 @@ func (s *Session) broadcast(b []byte) {
 		return
 	}
 	s.scrollback = append(s.scrollback, b...)
-	watchers := make([]func([]byte), 0, len(s.subscribers))
-	for _, w := range s.subscribers {
-		watchers = append(watchers, w)
+	watchers := make([]func([]byte), 0, len(s.watches))
+	for _, w := range s.watches {
+		watchers = append(watchers, w.onOutput)
 	}
 	s.mu.Unlock()
 
@@ -254,7 +323,7 @@ func (s *Session) end() {
 	}
 	s.ended = true
 	s.scrollback = nil
-	s.subscribers = map[int]func([]byte){}
+	s.watches = map[int]watch{}
 	s.mu.Unlock()
 
 	_ = s.shell.Close()

@@ -2,8 +2,10 @@ package router_test
 
 import (
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -126,5 +128,77 @@ func TestTheSessionEndsWhenTheLastUserLeaves(t *testing.T) {
 	rec := h.do(http.MethodGet, "/api/sessions/"+code, adaCookie)
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("the Code still works after everyone left: status %d", rec.Code)
+	}
+}
+
+func TestAJoiningUserIsSentTheRoster(t *testing.T) {
+	h := newHarness(t)
+	adaCookie := h.logIn(t)
+	code := h.createSession(t, adaCookie)
+
+	conn := h.connect(t, code, adaCookie)
+
+	got := readRoster(t, conn)
+	if want := []string{"Ada Lovelace"}; !reflect.DeepEqual(rosterNames(got), want) {
+		t.Errorf("roster = %v, want %v", rosterNames(got), want)
+	}
+	if got.Users[0].AvatarURL != ada.AvatarURL {
+		t.Errorf("avatar = %q, want the one from the OAuth provider %q", got.Users[0].AvatarURL, ada.AvatarURL)
+	}
+}
+
+func TestTheRosterUpdatesForEveryoneWhenSomeoneJoins(t *testing.T) {
+	h := newHarness(t)
+	adaCookie := h.logIn(t)
+	code := h.createSession(t, adaCookie)
+	adaConn := h.connect(t, code, adaCookie)
+	readRoster(t, adaConn)
+
+	graceConn := h.connect(t, code, h.logInAs(t, grace))
+
+	both := []string{"Ada Lovelace", "Grace Hopper"}
+	if got := rosterNames(readRoster(t, adaConn)); !reflect.DeepEqual(got, both) {
+		t.Errorf("Ada's roster = %v, want %v", got, both)
+	}
+	if got := rosterNames(readRoster(t, graceConn)); !reflect.DeepEqual(got, both) {
+		t.Errorf("Grace's roster = %v, want %v", got, both)
+	}
+}
+
+func TestTheRosterUpdatesForEveryoneWhenSomeoneLeaves(t *testing.T) {
+	h := newHarness(t)
+	adaCookie := h.logIn(t)
+	code := h.createSession(t, adaCookie)
+	adaConn := h.connect(t, code, adaCookie)
+	graceConn := h.connect(t, code, h.logInAs(t, grace))
+	readRoster(t, adaConn)
+
+	graceConn.Close()
+
+	want := []string{"Ada Lovelace"}
+	deadline := time.Now().Add(settle)
+	for time.Now().Before(deadline) {
+		if reflect.DeepEqual(rosterNames(readRoster(t, adaConn)), want) {
+			return
+		}
+	}
+	t.Errorf("Ada was never told Grace left")
+}
+
+func TestTheRosterNamesUsersByTheirAccountNotANickname(t *testing.T) {
+	h := newHarness(t)
+	adaCookie := h.logIn(t)
+	code := h.createSession(t, adaCookie)
+
+	got := readRoster(t, h.connect(t, code, adaCookie))
+
+	if len(got.Users) != 1 {
+		t.Fatalf("roster has %d Users, want 1", len(got.Users))
+	}
+	if got.Users[0].Name != ada.Name {
+		t.Errorf("name = %q, want the account name %q", got.Users[0].Name, ada.Name)
+	}
+	if got.Users[0].ID == "" {
+		t.Error("roster entry has no account ID")
 	}
 }

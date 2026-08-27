@@ -9,6 +9,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 
+	"backend/internal/account"
+	"backend/internal/auth"
 	"backend/internal/session"
 )
 
@@ -22,9 +24,16 @@ const (
 	maxInputMsg = 8 * 1024
 )
 
-// outputQueue is how many output chunks may wait for one slow browser before
-// it is dropped. A stuck reader must not stall the Session for everyone else.
+// outputQueue is how many frames may wait for one slow browser before they
+// are dropped. A stuck reader must not stall the Session for everyone else.
 const outputQueue = 256
+
+// frame is one WebSocket message waiting to go out. Terminal bytes go as
+// binary, roster updates as JSON text.
+type frame struct {
+	kind int
+	data []byte
+}
 
 // upgrader rejects cross-origin sockets. The browser sends the auth cookie
 // automatically, so without this check another site could open a Session on a
@@ -76,12 +85,19 @@ type control struct {
 }
 
 // JoinSession streams one User's terminal: Scrollback first, then live output,
-// while their keystrokes go the other way.
-func JoinSession(sessions *session.Store) gin.HandlerFunc {
+// while their keystrokes go the other way. It also sends the roster of
+// connected Users, and again every time that roster changes.
+func JoinSession(sessions *session.Store, accounts account.Store) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		s, ok := sessions.ByCode(c.Param("code"))
 		if !ok {
 			c.JSON(http.StatusNotFound, gin.H{"error": endedMessage})
+			return
+		}
+
+		me, err := accounts.ByID(c.Request.Context(), auth.AccountID(c))
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "not logged in"})
 			return
 		}
 
@@ -92,47 +108,69 @@ func JoinSession(sessions *session.Store) gin.HandlerFunc {
 		defer conn.Close()
 
 		// One goroutine owns every write: a WebSocket allows only one writer
-		// at a time, and output, Scrollback, and pings all want to write.
-		out := make(chan []byte, outputQueue)
-		go writeToBrowser(conn, out)
+		// at a time, and output, the roster, and pings all want to write.
+		//
+		// done stops that writer. The channel of frames is never closed,
+		// because another User leaving can make this Session announce a new
+		// roster through this callback at any moment, and a send on a closed
+		// channel would panic.
+		out := make(chan frame, outputQueue)
+		done := make(chan struct{})
+		defer close(done)
+		go writeToBrowser(conn, out, done)
 
-		send(out, s.Scrollback())
-		leave := s.Subscribe(func(b []byte) {
-			send(out, append([]byte(nil), b...))
-		})
+		sendTerminal(out, s.Scrollback())
+		leave := s.Join(
+			session.Watcher{ID: me.ID, Name: me.Identity.Name, AvatarURL: me.Identity.AvatarURL},
+			func(b []byte) { sendTerminal(out, append([]byte(nil), b...)) },
+			func(roster []session.Watcher) { sendRoster(out, roster) },
+		)
 		defer leave()
 
 		readFromBrowser(conn, s)
-		close(out)
 	}
 }
 
-// send queues output, dropping it if the browser has fallen too far behind.
-func send(out chan []byte, b []byte) {
+// sendTerminal queues terminal output, dropping it if the browser has fallen
+// too far behind.
+func sendTerminal(out chan frame, b []byte) {
 	if len(b) == 0 {
 		return
 	}
+	queue(out, frame{kind: websocket.BinaryMessage, data: b})
+}
+
+// sendRoster queues the list of connected Users as a JSON text frame.
+func sendRoster(out chan frame, roster []session.Watcher) {
+	body, err := json.Marshal(map[string]any{"type": "roster", "users": roster})
+	if err != nil {
+		log.Printf("encode roster: %v", err)
+		return
+	}
+	queue(out, frame{kind: websocket.TextMessage, data: body})
+}
+
+func queue(out chan frame, f frame) {
 	select {
-	case out <- b:
+	case out <- f:
 	default: // The reader is too slow. Drop rather than stall the Session.
 	}
 }
 
 // writeToBrowser is the socket's only writer.
-func writeToBrowser(conn *websocket.Conn, out <-chan []byte) {
+func writeToBrowser(conn *websocket.Conn, out <-chan frame, done <-chan struct{}) {
 	ping := time.NewTicker(pingEvery)
 	defer ping.Stop()
 
 	for {
 		select {
-		case b, ok := <-out:
-			if !ok {
-				conn.SetWriteDeadline(time.Now().Add(writeWait))
-				conn.WriteMessage(websocket.CloseMessage, nil)
-				return
-			}
+		case <-done:
 			conn.SetWriteDeadline(time.Now().Add(writeWait))
-			if err := conn.WriteMessage(websocket.BinaryMessage, b); err != nil {
+			conn.WriteMessage(websocket.CloseMessage, nil)
+			return
+		case f := <-out:
+			conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := conn.WriteMessage(f.kind, f.data); err != nil {
 				return
 			}
 		case <-ping.C:

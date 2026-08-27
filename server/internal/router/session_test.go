@@ -33,19 +33,70 @@ func (h *harness) connect(t *testing.T, code string, authCookie *http.Cookie) *w
 	return conn
 }
 
-// readOutput waits for one terminal-output frame.
+// readOutput waits for one terminal-output frame, stepping over the JSON
+// control frames (such as roster updates) that share the socket.
 func readOutput(t *testing.T, conn *websocket.Conn) string {
 	t.Helper()
 
-	conn.SetReadDeadline(time.Now().Add(settle))
-	kind, data, err := conn.ReadMessage()
-	if err != nil {
-		t.Fatalf("read: %v", err)
+	deadline := time.Now().Add(settle)
+	for time.Now().Before(deadline) {
+		conn.SetReadDeadline(deadline)
+		kind, data, err := conn.ReadMessage()
+		if err != nil {
+			t.Fatalf("read: %v", err)
+		}
+		if kind == websocket.BinaryMessage {
+			return string(data)
+		}
 	}
-	if kind != websocket.BinaryMessage {
-		t.Fatalf("got a %d frame, want a binary terminal frame", kind)
+	t.Fatal("no terminal output arrived")
+	return ""
+}
+
+// roster is a roster message from the server.
+type roster struct {
+	Type  string `json:"type"`
+	Users []struct {
+		ID        string `json:"id"`
+		Name      string `json:"name"`
+		AvatarURL string `json:"avatarUrl"`
+	} `json:"users"`
+}
+
+// readRoster waits for the next roster message, stepping over terminal output.
+func readRoster(t *testing.T, conn *websocket.Conn) roster {
+	t.Helper()
+
+	deadline := time.Now().Add(settle)
+	for time.Now().Before(deadline) {
+		conn.SetReadDeadline(deadline)
+		kind, data, err := conn.ReadMessage()
+		if err != nil {
+			t.Fatalf("read: %v", err)
+		}
+		if kind != websocket.TextMessage {
+			continue
+		}
+
+		var msg roster
+		if err := json.Unmarshal(data, &msg); err != nil {
+			t.Fatalf("decode %s: %v", data, err)
+		}
+		if msg.Type == "roster" {
+			return msg
+		}
 	}
-	return string(data)
+	t.Fatal("no roster arrived")
+	return roster{}
+}
+
+// rosterNames lists who a roster message says is connected.
+func rosterNames(r roster) []string {
+	out := make([]string, 0, len(r.Users))
+	for _, u := range r.Users {
+		out = append(out, u.Name)
+	}
+	return out
 }
 
 // connectExpectingRefusal dials the Session socket and requires it to fail.

@@ -3,13 +3,20 @@ import { Terminal as XTerm } from '@xterm/xterm'
 import { useEffect, useRef } from 'react'
 import '@xterm/xterm/css/xterm.css'
 
+export type RosterUser = {
+  id: string
+  name: string
+  avatarUrl: string
+}
+
 type Props = {
   code: string
   onEnded: () => void
+  onRoster: (users: RosterUser[]) => void
 }
 
 /** Renders one Session's terminal and keeps it wired to the server. */
-export function Terminal({ code, onEnded }: Props) {
+export function Terminal({ code, onEnded, onRoster }: Props) {
   const holder = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -42,7 +49,14 @@ export function Terminal({ code, onEnded }: Props) {
 
     socket.onopen = reportSize
     socket.onmessage = (event) => {
-      term.write(new Uint8Array(event.data as ArrayBuffer))
+      // Terminal bytes arrive as binary frames, control messages as JSON text.
+      if (typeof event.data !== 'string') {
+        term.write(new Uint8Array(event.data as ArrayBuffer))
+        return
+      }
+
+      const msg = JSON.parse(event.data) as { type: string; users?: RosterUser[] }
+      if (msg.type === 'roster' && msg.users) onRoster(msg.users)
     }
     socket.onclose = onEnded
 
@@ -61,7 +75,7 @@ export function Terminal({ code, onEnded }: Props) {
       socket.close()
       term.dispose()
     }
-  }, [code, onEnded])
+  }, [code, onEnded, onRoster])
 
   return <div className="terminal" ref={holder} />
 }

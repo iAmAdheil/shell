@@ -131,7 +131,7 @@ func TestTypingReachesTheShell(t *testing.T) {
 	})
 }
 
-func TestASubscriberSeesLiveOutput(t *testing.T) {
+func TestAConnectedUserSeesLiveOutput(t *testing.T) {
 	store, runner := newStore(t)
 	s, err := store.Create(context.Background(), 24, 80)
 	if err != nil {
@@ -139,8 +139,8 @@ func TestASubscriberSeesLiveOutput(t *testing.T) {
 	}
 
 	seen := make(chan []byte, 8)
-	unsubscribe := s.Subscribe(func(b []byte) { seen <- append([]byte(nil), b...) })
-	defer unsubscribe()
+	leave := s.Join(ada, func(b []byte) { seen <- append([]byte(nil), b...) }, func([]session.Watcher) {})
+	defer leave()
 
 	runner.Last().Say("live output")
 
@@ -215,7 +215,7 @@ func TestASessionEndsWhenItsLastWatcherLeaves(t *testing.T) {
 	}
 	sh := runner.Last()
 
-	leave := s.Subscribe(func([]byte) {})
+	leave := s.Join(ada, func([]byte) {}, func([]session.Watcher) {})
 	leave()
 
 	waitFor(t, "the container to be destroyed", sh.IsClosed)
@@ -232,8 +232,8 @@ func TestASessionSurvivesWhileOneWatcherRemains(t *testing.T) {
 	}
 	sh := runner.Last()
 
-	leaveFirst := s.Subscribe(func([]byte) {})
-	defer s.Subscribe(func([]byte) {})()
+	leaveFirst := s.Join(ada, func([]byte) {}, func([]session.Watcher) {})
+	defer s.Join(grace, func([]byte) {}, func([]session.Watcher) {})()
 	leaveFirst()
 
 	if sh.IsClosed() {

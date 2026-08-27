@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { checkSession, createSession, logOut } from './api'
-import { Terminal } from './Terminal'
+import { Terminal, type RosterUser } from './Terminal'
 import { useMe } from './useMe'
 import './App.css'
 
@@ -9,8 +9,12 @@ function App() {
   const [code, setCode] = useState<string | null>(null)
   const [typedCode, setTypedCode] = useState('')
   const [problem, setProblem] = useState<string | null>(null)
+  const [roster, setRoster] = useState<RosterUser[]>([])
 
-  const endSession = useCallback(() => setCode(null), [])
+  const endSession = useCallback(() => {
+    setCode(null)
+    setRoster([])
+  }, [])
 
   const startSession = async () => {
     setProblem(null)
@@ -66,6 +70,22 @@ function App() {
         <span className="brand">Shell</span>
         {code && <code className="code">{code}</code>}
         <span className="spacer" />
+        {code && roster.length > 0 && (
+          <ul className="roster" aria-label="Connected Users">
+            {roster.map((user) => (
+              <li key={user.id} className="member" title={user.name}>
+                {user.avatarUrl ? (
+                  <img src={user.avatarUrl} alt={user.name} width={24} height={24} />
+                ) : (
+                  <span className="initial" aria-hidden="true">
+                    {user.name.charAt(0)}
+                  </span>
+                )}
+                <span className="member-name">{user.name}</span>
+              </li>
+            ))}
+          </ul>
+        )}
         {state.me.avatarUrl && (
           <img className="avatar" src={state.me.avatarUrl} alt="" width={28} height={28} />
         )}
@@ -86,7 +106,7 @@ function App() {
       {problem && <p className="error" role="alert">{problem}</p>}
 
       {code ? (
-        <Terminal code={code} onEnded={endSession} />
+        <Terminal code={code} onEnded={endSession} onRoster={setRoster} />
       ) : (
         <main className="app">
           <h1>Shell</h1>
