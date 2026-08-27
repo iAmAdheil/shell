@@ -35,7 +35,9 @@ export default defineConfig(({ mode }) => {
           ]
         : []),
     ],
-    build: { sourcemap: uploadSourceMaps },
+    // "hidden" writes the source maps but leaves no sourceMappingURL comment
+    // in the bundle. The comment would point at a file the upload deletes.
+    build: { sourcemap: uploadSourceMaps ? 'hidden' : false },
     server: {
       proxy: {
         // ws lets the Session terminal socket through, not just plain requests.
