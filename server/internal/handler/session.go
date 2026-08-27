@@ -11,6 +11,7 @@ import (
 
 	"backend/internal/account"
 	"backend/internal/auth"
+	"backend/internal/observability"
 	"backend/internal/session"
 )
 
@@ -51,6 +52,7 @@ func CreateSession(sessions *session.Store) gin.HandlerFunc {
 		s, err := sessions.Create(c.Request.Context(), session.DefaultRows, session.DefaultCols)
 		if err != nil {
 			log.Printf("create session: %v", err)
+			observability.Capture(c, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "could not start a Session"})
 			return
 		}

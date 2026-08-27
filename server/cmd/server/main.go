@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"backend/internal/account"
 	"backend/internal/auth"
 	"backend/internal/login"
+	"backend/internal/observability"
 	"backend/internal/router"
 	"backend/internal/session"
 	"backend/internal/shell"
@@ -29,6 +31,12 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	// Sentry starts first, so it can report a failure in any later step.
+	if err := observability.Init(cfg.sentry); err != nil {
+		log.Fatalf("sentry: %v", err)
+	}
+	defer observability.Close()
 
 	ctx := context.Background()
 	accounts, err := account.OpenPostgres(ctx, cfg.databaseURL)
@@ -83,6 +91,7 @@ type config struct {
 	googleClientSecret string
 	appBaseURL         string
 	webBaseURL         string
+	sentry             observability.Config
 }
 
 // loadConfig reads the environment and reports every missing setting at once,
@@ -102,6 +111,13 @@ func loadConfig() (config, error) {
 		}
 		return fallback
 	}
+	rateWithDefault := func(key string, fallback float64) float64 {
+		v, err := strconv.ParseFloat(withDefault(key, ""), 64)
+		if err != nil || v < 0 || v > 1 {
+			return fallback
+		}
+		return v
+	}
 
 	cfg := config{
 		databaseURL:        required("DATABASE_URL"),
@@ -109,6 +125,14 @@ func loadConfig() (config, error) {
 		googleClientSecret: required("GOOGLE_CLIENT_SECRET"),
 		appBaseURL:         withDefault("APP_BASE_URL", "http://localhost:8081"),
 		webBaseURL:         withDefault("WEB_BASE_URL", "http://localhost:5173"),
+
+		// SENTRY_DSN is deliberately not required. Empty turns Sentry off, so
+		// the app still runs for anyone without a Sentry account.
+		sentry: observability.Config{
+			DSN:              os.Getenv("SENTRY_DSN"),
+			Environment:      withDefault("SENTRY_ENVIRONMENT", "development"),
+			TracesSampleRate: rateWithDefault("SENTRY_TRACES_SAMPLE_RATE", 0.1),
+		},
 	}
 	if len(missing) > 0 {
 		return config{}, fmt.Errorf("missing environment settings %v: copy .env.example to .env and fill them in", missing)

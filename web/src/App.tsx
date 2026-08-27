@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/react'
 import { useCallback, useState } from 'react'
 import { checkSession, createSession, logOut } from './api'
 import { Terminal, type RosterUser } from './Terminal'
@@ -21,6 +22,9 @@ function App() {
     try {
       setCode(await createSession())
     } catch (err) {
+      // A Session that will not start is a server fault, not a typo, so it is
+      // worth reporting. A Session Code that will not open usually is a typo.
+      Sentry.captureException(err)
       setProblem(message(err))
     }
   }

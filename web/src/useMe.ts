@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/react'
 import { useCallback, useEffect, useState } from 'react'
 import { fetchMe, type Me } from './api'
 
@@ -14,8 +15,12 @@ export function useMe() {
   const reload = useCallback(async () => {
     try {
       const me = await fetchMe()
+      // Sentry gets the Account ID only, never the User's name or avatar.
+      Sentry.setUser(me ? { id: me.id } : null)
       setState(me ? { status: 'logged-in', me } : { status: 'logged-out' })
     } catch (err) {
+      // The app shows this one, so nothing else would report it.
+      Sentry.captureException(err)
       setState({ status: 'error', message: String(err) })
     }
   }, [])

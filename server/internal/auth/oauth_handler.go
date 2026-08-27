@@ -7,6 +7,7 @@ import (
 
 	"backend/internal/account"
 	"backend/internal/login"
+	"backend/internal/observability"
 )
 
 // StateCookieName holds the one-use value that ties a callback back to the
@@ -39,12 +40,14 @@ func Callback(provider IdentityProvider, accounts account.Store, logins *login.S
 
 		id, err := provider.Exchange(c.Request.Context(), c.Query("code"))
 		if err != nil {
+			observability.Capture(c, err)
 			c.JSON(http.StatusBadGateway, gin.H{"error": "could not complete login"})
 			return
 		}
 
 		a, err := accounts.FindOrCreate(c.Request.Context(), id)
 		if err != nil {
+			observability.Capture(c, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "could not save account"})
 			return
 		}
