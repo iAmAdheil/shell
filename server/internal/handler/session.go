@@ -49,6 +49,25 @@ func CreateSession(sessions *session.Store) gin.HandlerFunc {
 	}
 }
 
+// endedMessage covers both an ended Code and one that never existed. The
+// server forgets a Session the moment it ends (ticket 06), so it genuinely
+// cannot tell the two apart, and a message that claimed to would be a guess.
+const endedMessage = "this Session has ended, or that Session Code is wrong"
+
+// CheckSession reports whether a Session Code still opens a Session. The
+// browser asks before it opens a terminal, so a dead Code shows a message
+// instead of an empty black rectangle.
+func CheckSession(sessions *session.Store) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		s, ok := sessions.ByCode(c.Param("code"))
+		if !ok {
+			c.JSON(http.StatusNotFound, gin.H{"error": endedMessage})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"code": s.Code})
+	}
+}
+
 // control is a JSON message from the browser.
 type control struct {
 	Type string `json:"type"`
@@ -62,7 +81,7 @@ func JoinSession(sessions *session.Store) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		s, ok := sessions.ByCode(c.Param("code"))
 		if !ok {
-			c.JSON(http.StatusNotFound, gin.H{"error": "this Session has ended"})
+			c.JSON(http.StatusNotFound, gin.H{"error": endedMessage})
 			return
 		}
 

@@ -91,3 +91,32 @@
   padding: 0.5rem;
   background: #0d0d0d;
 }
+
+.or {
+  margin: 1.75rem 0 0.75rem;
+  color: #6b6b6b;
+  font-size: 0.9rem;
+}
+
+.join {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.input {
+  padding: 0.6rem 0.8rem;
+  border: 1px solid #3a3a3a;
+  border-radius: 0.5rem;
+  background: #151515;
+  color: inherit;
+  font: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.08em;
+  width: 11rem;
+}
+
+.input:focus {
+  outline: none;
+  border-color: #646cff;
+}

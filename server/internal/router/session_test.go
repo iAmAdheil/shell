@@ -48,6 +48,20 @@ func readOutput(t *testing.T, conn *websocket.Conn) string {
 	return string(data)
 }
 
+// connectExpectingRefusal dials the Session socket and requires it to fail.
+func (h *harness) connectExpectingRefusal(t *testing.T, code string, authCookie *http.Cookie) {
+	t.Helper()
+
+	url := "ws" + strings.TrimPrefix(h.server.URL, "http") + "/api/sessions/" + code + "/ws"
+	header := http.Header{"Cookie": {authCookie.Name + "=" + authCookie.Value}}
+
+	conn, _, err := websocket.DefaultDialer.Dial(url, header)
+	if err == nil {
+		conn.Close()
+		t.Fatalf("Code %q was accepted, want it refused", code)
+	}
+}
+
 func TestCreatingASessionNeedsALogin(t *testing.T) {
 	h := newHarness(t)
 
@@ -187,5 +201,88 @@ func TestConnectingWithoutALoginIsRefused(t *testing.T) {
 	}
 	if resp == nil || resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("status = %v, want %d", resp, http.StatusUnauthorized)
+	}
+}
+
+func TestAnEndedSessionCodeIsRefused(t *testing.T) {
+	h := newHarness(t)
+	authCookie := h.logIn(t)
+	code := h.createSession(t, authCookie)
+
+	conn := h.connect(t, code, authCookie)
+	h.shells.Last().Say("ready")
+	readOutput(t, conn)
+	conn.Close()
+	waitFor(t, "the Session to end", h.shells.Last().IsClosed)
+
+	rec := h.do(http.MethodGet, "/api/sessions/"+code, authCookie)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+	if !strings.Contains(rec.Body.String(), "ended") {
+		t.Errorf("body = %s, want it to say the Session has ended", rec.Body)
+	}
+}
+
+func TestAnEndedSessionCodeNeverStartsANewSession(t *testing.T) {
+	h := newHarness(t)
+	authCookie := h.logIn(t)
+	code := h.createSession(t, authCookie)
+
+	conn := h.connect(t, code, authCookie)
+	h.shells.Last().Say("ready")
+	readOutput(t, conn)
+	conn.Close()
+	waitFor(t, "the Session to end", h.shells.Last().IsClosed)
+
+	h.do(http.MethodGet, "/api/sessions/"+code, authCookie)
+	h.connectExpectingRefusal(t, code, authCookie)
+
+	if h.shells.Count() != 1 {
+		t.Errorf("started %d containers, want 1: an ended Code started a new Session", h.shells.Count())
+	}
+}
+
+func TestACodeThatNeverExistedIsRefusedClearly(t *testing.T) {
+	h := newHarness(t)
+	authCookie := h.logIn(t)
+
+	rec := h.do(http.MethodGet, "/api/sessions/nosuchcode", authCookie)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+	if rec.Body.Len() == 0 {
+		t.Error("no message explaining why the Code was refused")
+	}
+	if h.shells.Count() != 0 {
+		t.Errorf("started %d containers for an unknown Code, want 0", h.shells.Count())
+	}
+}
+
+func TestARunningSessionCodeIsAccepted(t *testing.T) {
+	h := newHarness(t)
+	authCookie := h.logIn(t)
+	code := h.createSession(t, authCookie)
+
+	rec := h.do(http.MethodGet, "/api/sessions/"+code, authCookie)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (body %s)", rec.Code, http.StatusOK, rec.Body)
+	}
+	if !strings.Contains(rec.Body.String(), code) {
+		t.Errorf("body = %s, want it to name the Code %q", rec.Body, code)
+	}
+}
+
+func TestCheckingACodeNeedsALogin(t *testing.T) {
+	h := newHarness(t)
+	code := h.createSession(t, h.logIn(t))
+
+	rec := h.do(http.MethodGet, "/api/sessions/"+code)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
 	}
 }

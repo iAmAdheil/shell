@@ -4,8 +4,8 @@
 
 **Blocked by:** 20
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] After a Session ends, opening its Session Code shows a "this Session has ended" message.
-- [ ] Opening an ended Session's code never creates a new Session under that code.
-- [ ] Opening a Session Code that never existed shows a clear error, not a crash.
+- [x] After a Session ends, opening its Session Code shows a "this Session has ended" message. One message covers this and the unknown-Code case: "this Session has ended, or that Session Code is wrong". The server forgets a Session the moment it ends, so it cannot tell the two apart, and a message that claimed to would be a guess.
+- [x] Opening an ended Session's code never creates a new Session under that code.
+- [x] Opening a Session Code that never existed shows a clear error, not a crash.

@@ -36,6 +36,7 @@ func New(d Deps) *gin.Engine {
 		guarded.Use(auth.RequireLogin(d.Logins))
 		guarded.GET("/me", handler.Me(d.Accounts))
 		guarded.POST("/sessions", handler.CreateSession(d.Sessions))
+		guarded.GET("/sessions/:code", handler.CheckSession(d.Sessions))
 		guarded.GET("/sessions/:code/ws", handler.JoinSession(d.Sessions))
 	}
 

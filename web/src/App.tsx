@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { createSession, logOut } from './api'
+import { checkSession, createSession, logOut } from './api'
 import { Terminal } from './Terminal'
 import { useMe } from './useMe'
 import './App.css'
@@ -7,6 +7,7 @@ import './App.css'
 function App() {
   const { state, reload } = useMe()
   const [code, setCode] = useState<string | null>(null)
+  const [typedCode, setTypedCode] = useState('')
   const [problem, setProblem] = useState<string | null>(null)
 
   const endSession = useCallback(() => setCode(null), [])
@@ -16,7 +17,24 @@ function App() {
     try {
       setCode(await createSession())
     } catch (err) {
-      setProblem(String(err))
+      setProblem(message(err))
+    }
+  }
+
+  /** Opens an existing Session, but only after the Code is known to be live. */
+  const joinSession = async (event: React.FormEvent) => {
+    event.preventDefault()
+    setProblem(null)
+
+    const wanted = typedCode.trim().toLowerCase()
+    if (!wanted) return
+
+    try {
+      await checkSession(wanted)
+      setCode(wanted)
+      setTypedCode('')
+    } catch (err) {
+      setProblem(message(err))
     }
   }
 
@@ -73,13 +91,37 @@ function App() {
         <main className="app">
           <h1>Shell</h1>
           <p className="tagline">A terminal you can share.</p>
+
           <button type="button" className="button" onClick={startSession}>
             New Session
           </button>
+
+          <p className="or">or join one</p>
+
+          <form className="join" onSubmit={joinSession}>
+            <input
+              className="input"
+              value={typedCode}
+              onChange={(event) => setTypedCode(event.target.value)}
+              placeholder="Session Code"
+              aria-label="Session Code"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+            />
+            <button type="submit" className="button">
+              Join
+            </button>
+          </form>
         </main>
       )}
     </div>
   )
+}
+
+/** Pulls the readable text out of whatever was thrown. */
+function message(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
 }
 
 export default App
