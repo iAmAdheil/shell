@@ -15,3 +15,5 @@ server/*.exe
 
 # separate project, not part of this monorepo
 my-shell/
+.playwright-mcp
+.env
