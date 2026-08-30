@@ -12,8 +12,9 @@ server/*.exe
 .firecrawl
 .DS_Store
 *.log
+.env
 
 # separate project, not part of this monorepo
 my-shell/
-.playwright-mcp
-.env
+.playwright-mcp/
+rmlist.yml

@@ -1,4 +1,4 @@
-.PHONY: dev-web dev-server start build-web build-server
+.PHONY: dev-web dev-server start build-web build-server db-up db-down test test-server
 
 dev-web:
 	cd web && npm run dev
@@ -14,3 +14,14 @@ build-web:
 
 build-server:
 	cd server && go build -o bin/server ./cmd/server
+
+db-up:
+	docker compose up -d --wait
+
+db-down:
+	docker compose down
+
+test: test-server
+
+test-server:
+	cd server && go test ./...
