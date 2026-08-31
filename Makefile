@@ -1,4 +1,4 @@
-.PHONY: dev-web dev-server start build-web build-server db-up db-down test test-server
+.PHONY: dev-web dev-server start build-web build-server build-session-image db-up db-down test test-server
 
 dev-web:
 	cd web && npm run dev
@@ -14,6 +14,10 @@ build-web:
 
 build-server:
 	cd server && go build -o bin/server ./cmd/server
+
+# The image every Session runs in. Build it before the server starts a Session.
+build-session-image:
+	docker build -f server/session.Dockerfile -t shell-session:latest server
 
 db-up:
 	docker compose up -d --wait

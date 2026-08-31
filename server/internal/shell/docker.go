@@ -10,9 +10,11 @@ import (
 	"github.com/docker/docker/client"
 )
 
-// Image is what a Session runs. Debian ships real bash and the coreutils a
-// visitor expects, which matters more here than a smaller image would.
-const Image = "debian:bookworm-slim"
+// Image is what a Session runs. It is built from server/session.Dockerfile:
+// Debian with apt package lists already there, and my-shell as the default
+// command. Build it with "make build-session-image". The server does not
+// build or pull it, so Start fails until the image is on the host.
+const Image = "shell-session:latest"
 
 // LabelKey marks every container this server starts, so its own containers
 // can be told apart from anything else on the host.
@@ -53,8 +55,8 @@ func (r *DockerRunner) Start(ctx context.Context, rows, cols uint16) (Shell, err
 
 	created, err := r.cli.ContainerCreate(ctx,
 		&container.Config{
-			Image:        Image,
-			Cmd:          []string{"bash"},
+			Image: Image,
+			// No Cmd: the image runs my-shell by default.
 			Env:          []string{"TERM=xterm-256color"},
 			WorkingDir:   "/root",
 			Labels:       map[string]string{LabelKey: "1"},
