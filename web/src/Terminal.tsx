@@ -9,14 +9,22 @@ export type RosterUser = {
   avatarUrl: string
 }
 
+/** What the status strip below the terminal reports. */
+export type TerminalStatus = {
+  connected: boolean
+  rows: number
+  cols: number
+}
+
 type Props = {
   code: string
   onEnded: () => void
   onRoster: (users: RosterUser[]) => void
+  onStatus: (status: TerminalStatus) => void
 }
 
 /** Renders one Session's terminal and keeps it wired to the server. */
-export function Terminal({ code, onEnded, onRoster }: Props) {
+export function Terminal({ code, onEnded, onRoster, onStatus }: Props) {
   const holder = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -28,7 +36,16 @@ export function Terminal({ code, onEnded, onRoster }: Props) {
       cursorBlink: true,
       fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
       fontSize: 13,
-      theme: { background: '#0d0d0d' },
+      lineHeight: 1.35,
+      // Matches the tokens in index.css, so the terminal and its chrome read
+      // as one surface rather than a black rectangle pasted onto the page.
+      theme: {
+        background: '#08080a',
+        foreground: '#cfcfd6',
+        cursor: '#c084fc',
+        cursorAccent: '#08080a',
+        selectionBackground: 'rgba(192, 132, 252, 0.28)',
+      },
     })
     const fit = new FitAddon()
     term.loadAddon(fit)
@@ -41,9 +58,11 @@ export function Terminal({ code, onEnded, onRoster }: Props) {
     /** Tells the server how big this viewport is, so the shell matches it. */
     const reportSize = () => {
       fit.fit()
-      if (socket?.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ type: 'resize', rows: term.rows, cols: term.cols }))
+      const open = socket?.readyState === WebSocket.OPEN
+      if (open) {
+        socket?.send(JSON.stringify({ type: 'resize', rows: term.rows, cols: term.cols }))
       }
+      onStatus({ connected: open, rows: term.rows, cols: term.cols })
     }
 
     const connect = () => {
@@ -64,7 +83,9 @@ export function Terminal({ code, onEnded, onRoster }: Props) {
       }
       // A close this effect's own cleanup caused must not end the Session.
       socket.onclose = () => {
-        if (!closedByCleanup) onEnded()
+        if (closedByCleanup) return
+        onStatus({ connected: false, rows: term.rows, cols: term.cols })
+        onEnded()
       }
     }
 
@@ -92,7 +113,7 @@ export function Terminal({ code, onEnded, onRoster }: Props) {
       socket?.close()
       term.dispose()
     }
-  }, [code, onEnded, onRoster])
+  }, [code, onEnded, onRoster, onStatus])
 
   return <div className="terminal" ref={holder} />
 }
