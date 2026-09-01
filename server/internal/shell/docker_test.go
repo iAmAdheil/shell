@@ -118,6 +118,48 @@ func TestClosingAShellDestroysItsContainer(t *testing.T) {
 	}
 }
 
+func TestASessionRunsMyShellByDefault(t *testing.T) {
+	runner := newRunner(t)
+	ctx := context.Background()
+
+	sh, err := runner.Start(ctx, 24, 80)
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(func() { sh.Close() })
+
+	// PID 1 is the container's default command.
+	if _, err := sh.Write([]byte("readlink /proc/1/exe\n")); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+
+	want := "/usr/local/bin/my-shell"
+	if got := readUntil(t, sh, want); !strings.Contains(got, want) {
+		t.Errorf("my-shell is not the default command, saw: %q", got)
+	}
+}
+
+func TestASessionHasAptPackageLists(t *testing.T) {
+	runner := newRunner(t)
+	ctx := context.Background()
+
+	sh, err := runner.Start(ctx, 24, 80)
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(func() { sh.Close() })
+
+	// A list file is there only after an apt-get update. Without one, a User
+	// cannot install a package.
+	if _, err := sh.Write([]byte("ls /var/lib/apt/lists\n")); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+
+	if got := readUntil(t, sh, "_Packages"); !strings.Contains(got, "_Packages") {
+		t.Errorf("no apt package lists in the image, saw: %q", got)
+	}
+}
+
 func TestTheShellStartsAtTheRequestedSize(t *testing.T) {
 	runner := newRunner(t)
 	ctx := context.Background()
@@ -128,7 +170,7 @@ func TestTheShellStartsAtTheRequestedSize(t *testing.T) {
 	}
 	t.Cleanup(func() { sh.Close() })
 
-	if _, err := sh.Write([]byte("stty size\n")); err != nil {
+	if _, err := sh.Write([]byte("stty -F /dev/tty size\n")); err != nil {
 		t.Fatalf("Write: %v", err)
 	}
 
@@ -146,12 +188,12 @@ func TestResizingChangesTheTerminalSize(t *testing.T) {
 		t.Fatalf("Start: %v", err)
 	}
 	t.Cleanup(func() { sh.Close() })
-	readUntil(t, sh, "#")
+	readUntil(t, sh, "$ ")
 
 	if err := sh.Resize(40, 120); err != nil {
 		t.Fatalf("Resize: %v", err)
 	}
-	if _, err := sh.Write([]byte("stty size\n")); err != nil {
+	if _, err := sh.Write([]byte("stty -F /dev/tty size\n")); err != nil {
 		t.Fatalf("Write: %v", err)
 	}
 
