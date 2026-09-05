@@ -19,6 +19,14 @@ _Avoid_: Invite code, room code, join link.
 **Scrollback**:
 The full output history of a Session from its start. A User who joins a Session sees the complete Scrollback, not just output from the point they joined.
 
+**Active User**:
+The one User who typed last. A Session has one shell, so it has one cursor, and that cursor belongs to the Active User until somebody else types. Nobody is the Active User before the first keystroke of a Session, or once the Active User disconnects.
+_Avoid_: Owner, driver, host, presenter, controller.
+
+**User Colour**:
+The colour a Session gives a User when they join, held for the life of that Session. It marks the User on the roster, and the cursor takes the Active User's Colour. Colours belong to a Session, not to an Account, so the same person can look different in two Sessions.
+_Avoid_: Theme, highlight, tint.
+
 **Account**:
 A User's persistent record, created on their first OAuth login and keyed by the identity their provider reports. Accounts live in Postgres and survive a restart. Sessions do not.
 _Avoid_: Profile, user record.

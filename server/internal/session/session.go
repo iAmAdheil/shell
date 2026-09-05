@@ -45,6 +45,28 @@ type Watcher struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
 	AvatarURL string `json:"avatarUrl"`
+
+	// Color and Active are filled in by the Session, not by the caller.
+	//
+	// Color is this User's colour for the life of the Session, so that the
+	// cursor can say who is driving. Active marks the User who typed last:
+	// one shared shell has one cursor, and it belongs to whoever typed.
+	Color  string `json:"color"`
+	Active bool   `json:"active"`
+}
+
+// palette is the colours a Session hands to its Users, in order. They are
+// picked to stay apart from each other and to stay readable on a dark
+// terminal. A Session with more Users than colours starts again at the top.
+var palette = []string{
+	"#c792ea", // violet
+	"#7fdbca", // teal
+	"#ffcb6b", // amber
+	"#f78c6c", // orange
+	"#82aaff", // blue
+	"#c3e88d", // green
+	"#ff5370", // red
+	"#89ddff", // cyan
 }
 
 // watch is one open browser tab. A User with two tabs open has two of these
@@ -83,6 +105,13 @@ type Session struct {
 	nextWatch  int
 	joined     bool
 	ended      bool
+
+	// colors is the colour each User keeps for the life of this Session,
+	// keyed by account ID. A User who leaves and comes back looks the same.
+	colors map[string]string
+
+	// activeID is the User who typed last, or empty before anyone has typed.
+	activeID string
 }
 
 // Store holds every running Session, keyed by Session Code.
@@ -118,6 +147,7 @@ func (st *Store) Create(ctx context.Context, rows, cols uint16) (*Session, error
 		shell:   sh,
 		store:   st,
 		watches: map[int]watch{},
+		colors:  map[string]string{},
 	}
 
 	st.mu.Lock()
@@ -223,6 +253,7 @@ func (s *Session) Join(who Watcher, onOutput func([]byte), onRoster func([]Watch
 	s.nextWatch++
 	s.watches[id] = watch{who: who, onOutput: onOutput, onRoster: onRoster}
 	s.joined = true
+	s.colorForLocked(who.ID)
 	s.mu.Unlock()
 
 	s.announceRoster()
@@ -260,6 +291,12 @@ func (m *Membership) Leave() {
 		s.mu.Lock()
 		delete(s.watches, m.id)
 		last := len(s.watches) == 0 && !s.ended
+		// The cursor must not keep the colour of somebody who has gone. A
+		// User with a second tab open is still here, so this checks the
+		// remaining tabs rather than the one being closed.
+		if s.activeID != "" && !s.stillHereLocked(s.activeID) {
+			s.activeID = ""
+		}
 		s.mu.Unlock()
 
 		if last {
@@ -270,6 +307,48 @@ func (m *Membership) Leave() {
 		s.announceRoster()
 		_ = s.fitShell()
 	})
+}
+
+// Type sends this User's keystrokes to the shared shell and makes them the
+// active User. There is one shell, so there is one cursor, and it belongs to
+// whoever typed last until somebody else types.
+func (m *Membership) Type(p []byte) error {
+	s := m.session
+
+	s.mu.Lock()
+	w, ok := s.watches[m.id]
+	changed := ok && s.activeID != w.who.ID
+	if changed {
+		s.activeID = w.who.ID
+	}
+	s.mu.Unlock()
+
+	if changed {
+		s.announceRoster()
+	}
+	return s.Type(p)
+}
+
+// colorForLocked gives a User the colour they keep for the life of this
+// Session. Colours go out in join order, so no two Users in one Session look
+// alike until the palette runs out.
+func (s *Session) colorForLocked(userID string) string {
+	if c, ok := s.colors[userID]; ok {
+		return c
+	}
+	c := palette[len(s.colors)%len(palette)]
+	s.colors[userID] = c
+	return c
+}
+
+// stillHereLocked reports whether a User has any tab still open.
+func (s *Session) stillHereLocked(userID string) bool {
+	for _, w := range s.watches {
+		if w.who.ID == userID {
+			return true
+		}
+	}
+	return false
 }
 
 // fitShell sizes the one shared shell so its output fits inside every
@@ -319,6 +398,8 @@ func (s *Session) rosterLocked() []Watcher {
 
 	roster := make([]Watcher, 0, len(seen))
 	for _, w := range seen {
+		w.Color = s.colors[w.ID]
+		w.Active = w.ID == s.activeID
 		roster = append(roster, w)
 	}
 	sort.Slice(roster, func(i, j int) bool {

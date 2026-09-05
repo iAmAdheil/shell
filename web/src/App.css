@@ -154,6 +154,9 @@
   color: var(--text);
 }
 
+/* The ring is this User's colour, and the terminal cursor takes the same one
+   while they are typing. That pairing is the whole point: it says who is
+   driving the one shared shell. */
 .who .av {
   display: grid;
   place-items: center;
@@ -161,16 +164,24 @@
   height: 22px;
   border-radius: 50%;
   background: var(--surface);
-  color: var(--muted);
+  box-shadow: 0 0 0 2px var(--user, var(--border));
+  color: var(--user, var(--muted));
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
   object-fit: cover;
 }
 
-.who.you .av {
-  background: var(--accent);
-  color: var(--accent-ink);
+/* The User typing right now. The pill takes their colour, so the roster and
+   the cursor agree without the reader having to compare two shades. */
+.who.typing {
+  border-color: var(--user, var(--border));
+  color: var(--text);
+}
+
+.who.typing .av {
+  background: var(--user, var(--surface));
+  color: #08080a;
 }
 
 .who-name {

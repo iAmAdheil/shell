@@ -404,7 +404,14 @@ function Roster({ roster, meId }: { roster: RosterUser[]; meId: string }) {
   return (
     <ul className="roster" aria-label="Connected Users">
       {roster.map((user) => (
-        <li key={user.id} className={`who${user.id === meId ? ' you' : ''}`} title={user.name}>
+        <li
+          key={user.id}
+          // Each User carries their own colour, so the ring on their avatar
+          // and the terminal cursor are visibly the same person.
+          style={{ '--user': user.color } as React.CSSProperties}
+          className={`who${user.id === meId ? ' you' : ''}${user.active ? ' typing' : ''}`}
+          title={user.active ? `${user.name} is typing` : user.name}
+        >
           <Avatar user={user} />
           <span className="who-name">{user.id === meId ? 'you' : user.name}</span>
         </li>
