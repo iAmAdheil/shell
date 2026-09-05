@@ -20,3 +20,13 @@ my-shell/
 rmlist.yml
 .gstack/
 .lazyweb/
+/my-shell/
+node_modules/
+dist/
+build/
+.cache/
+.turbo/
+target/
+coverage/
+tmp/
+temp/
