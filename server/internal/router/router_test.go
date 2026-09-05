@@ -44,7 +44,9 @@ type harness struct {
 	shells   *shelltest.Runner
 }
 
-func newHarness(t *testing.T) *harness {
+// newHarness builds a router over fakes. Each opt may change the Deps before
+// the router is built, which is how a test turns the dev login on.
+func newHarness(t *testing.T, opts ...func(*router.Deps)) *harness {
 	t.Helper()
 
 	h := &harness{
@@ -56,13 +58,19 @@ func newHarness(t *testing.T) *harness {
 	sessions := session.NewStore(h.shells)
 	t.Cleanup(sessions.CloseAll)
 
-	h.engine = router.New(router.Deps{
+	deps := router.Deps{
 		Accounts:   h.accounts,
 		Logins:     login.NewStore(),
 		Google:     h.google,
 		Sessions:   sessions,
 		WebBaseURL: "http://web.test",
-	})
+		AppBaseURL: "http://app.test",
+	}
+	for _, opt := range opts {
+		opt(&deps)
+	}
+
+	h.engine = router.New(deps)
 
 	h.server = httptest.NewServer(h.engine)
 	t.Cleanup(h.server.Close)

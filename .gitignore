@@ -30,3 +30,7 @@ target/
 coverage/
 tmp/
 temp/
+
+# Playwright
+web/test-results/
+web/playwright-report/

@@ -1,4 +1,4 @@
-.PHONY: dev-web dev-server start build-web build-server build-session-image db-up db-down test test-server
+.PHONY: dev-web dev-server start build-web build-server build-session-image db-up db-down test test-server test-e2e
 
 dev-web:
 	cd web && npm run dev
@@ -29,3 +29,8 @@ test: test-server
 
 test-server:
 	cd server && go test ./...
+
+# Browser tests. They need the stack already up, and the server started with
+# DEV_LOGIN_SECRET set. Run `make start` in another terminal first.
+test-e2e:
+	cd web && npx playwright test
