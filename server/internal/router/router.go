@@ -20,6 +20,15 @@ type Deps struct {
 
 	// WebBaseURL is where a finished login sends the browser back to.
 	WebBaseURL string
+
+	// AppBaseURL is this server's own address. The dev login redirects the
+	// browser back to itself through it.
+	AppBaseURL string
+
+	// DevLoginSecret turns on the dev login routes. Empty leaves them
+	// unregistered, so the router itself answers 404 and no handler runs.
+	// Production must never set it.
+	DevLoginSecret string
 }
 
 func New(d Deps) *gin.Engine {
@@ -38,6 +47,14 @@ func New(d Deps) *gin.Engine {
 		api.GET("/auth/google/start", auth.Start(d.Google))
 		api.GET("/auth/google/callback", auth.Callback(d.Google, d.Accounts, d.Logins, d.WebBaseURL))
 		api.POST("/auth/logout", auth.Logout(d.Logins))
+
+		// The dev login lets one person be several Users at once, for testing
+		// a shared Session. It exists only when the secret is set.
+		if d.DevLoginSecret != "" {
+			dev := api.Group("/auth/dev", auth.RequireDevSecret(d.DevLoginSecret))
+			dev.GET("/start", auth.DevStart(d.DevLoginSecret, d.AppBaseURL))
+			dev.GET("/callback", auth.Callback(auth.DevProvider{}, d.Accounts, d.Logins, d.WebBaseURL))
+		}
 
 		guarded := api.Group("")
 		guarded.Use(auth.RequireLogin(d.Logins), tagAccount)

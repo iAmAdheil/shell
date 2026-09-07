@@ -16,6 +16,13 @@ import (
 // out and drive the whole login flow with no browser and no network.
 type IdentityProvider interface {
 	AuthCodeURL(state string) string
+	IdentityExchanger
+}
+
+// IdentityExchanger is the half of IdentityProvider that Callback needs. A
+// provider that decides for itself where to send the browser, as the dev
+// login does, implements this alone and still reuses the whole callback.
+type IdentityExchanger interface {
 	Exchange(ctx context.Context, code string) (account.Identity, error)
 }
 

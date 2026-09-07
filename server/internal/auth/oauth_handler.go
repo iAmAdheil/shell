@@ -29,7 +29,7 @@ func Start(provider IdentityProvider) gin.HandlerFunc {
 
 // Callback receives the User back from the provider, finds or creates their
 // Account, and leaves them holding an auth cookie.
-func Callback(provider IdentityProvider, accounts account.Store, logins *login.Store, webBaseURL string) gin.HandlerFunc {
+func Callback(provider IdentityExchanger, accounts account.Store, logins *login.Store, webBaseURL string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		want, err := c.Cookie(StateCookieName)
 		if err != nil || want == "" || c.Query("state") != want {

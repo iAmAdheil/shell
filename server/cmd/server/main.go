@@ -61,7 +61,15 @@ func main() {
 		Google:     auth.NewGoogleProvider(cfg.googleClientID, cfg.googleClientSecret, cfg.appBaseURL+"/api/auth/google/callback"),
 		Sessions:   sessions,
 		WebBaseURL: cfg.webBaseURL,
+
+		AppBaseURL:     cfg.appBaseURL,
+		DevLoginSecret: cfg.devLoginSecret,
 	})
+
+	if cfg.devLoginSecret != "" {
+		log.Printf("DEV LOGIN IS ON: %s/api/auth/dev/start?u=<name>&k=<DEV_LOGIN_SECRET>", cfg.appBaseURL)
+		log.Println("DEV LOGIN IS ON: never set DEV_LOGIN_SECRET in production")
+	}
 
 	srv := &http.Server{Addr: ":8081", Handler: r}
 
@@ -91,6 +99,7 @@ type config struct {
 	googleClientSecret string
 	appBaseURL         string
 	webBaseURL         string
+	devLoginSecret     string
 	sentry             observability.Config
 }
 
@@ -125,6 +134,10 @@ func loadConfig() (config, error) {
 		googleClientSecret: required("GOOGLE_CLIENT_SECRET"),
 		appBaseURL:         withDefault("APP_BASE_URL", "http://localhost:8081"),
 		webBaseURL:         withDefault("WEB_BASE_URL", "http://localhost:5173"),
+
+		// DEV_LOGIN_SECRET is deliberately not required. Empty leaves the dev
+		// login routes unregistered, which is what production wants.
+		devLoginSecret: os.Getenv("DEV_LOGIN_SECRET"),
 
 		// SENTRY_DSN is deliberately not required. Empty turns Sentry off, so
 		// the app still runs for anyone without a Sentry account.
