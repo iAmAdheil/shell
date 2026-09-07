@@ -201,7 +201,7 @@ func readFromBrowser(conn *websocket.Conn, s *session.Session, member *session.M
 
 		switch kind {
 		case websocket.BinaryMessage:
-			if err := s.Type(data); err != nil {
+			if err := member.Type(data); err != nil {
 				return
 			}
 		case websocket.TextMessage:

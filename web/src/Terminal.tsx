@@ -7,6 +7,12 @@ export type RosterUser = {
   id: string
   name: string
   avatarUrl: string
+
+  /** This User's colour for the life of the Session, assigned by the server. */
+  color: string
+
+  /** True for the User who typed last. One shared shell has one cursor. */
+  active: boolean
 }
 
 /** What the status strip below the terminal reports. */
@@ -31,21 +37,24 @@ export function Terminal({ code, onEnded, onRoster, onStatus }: Props) {
     const node = holder.current
     if (!node) return
 
+    // Matches the tokens in index.css, so the terminal and its chrome read as
+    // one surface rather than a black rectangle pasted onto the page. The
+    // cursor colour here is the one used before anybody has typed.
+    const baseTheme = {
+      background: '#08080a',
+      foreground: '#cfcfd6',
+      cursor: '#c084fc',
+      cursorAccent: '#08080a',
+      selectionBackground: 'rgba(192, 132, 252, 0.28)',
+    }
+
     const term = new XTerm({
       convertEol: false,
       cursorBlink: true,
       fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
       fontSize: 13,
       lineHeight: 1.35,
-      // Matches the tokens in index.css, so the terminal and its chrome read
-      // as one surface rather than a black rectangle pasted onto the page.
-      theme: {
-        background: '#08080a',
-        foreground: '#cfcfd6',
-        cursor: '#c084fc',
-        cursorAccent: '#08080a',
-        selectionBackground: 'rgba(192, 132, 252, 0.28)',
-      },
+      theme: baseTheme,
     })
     const fit = new FitAddon()
     term.loadAddon(fit)
@@ -79,7 +88,14 @@ export function Terminal({ code, onEnded, onRoster, onStatus }: Props) {
         }
 
         const msg = JSON.parse(event.data) as { type: string; users?: RosterUser[] }
-        if (msg.type === 'roster' && msg.users) onRoster(msg.users)
+        if (msg.type === 'roster' && msg.users) {
+          onRoster(msg.users)
+
+          // There is one shell, so there is one cursor. It takes the colour of
+          // whoever typed last, which is how a reader tells who is driving.
+          const active = msg.users.find((user) => user.active)
+          term.options.theme = { ...baseTheme, cursor: active?.color ?? baseTheme.cursor }
+        }
       }
       // A close this effect's own cleanup caused must not end the Session.
       socket.onclose = () => {
