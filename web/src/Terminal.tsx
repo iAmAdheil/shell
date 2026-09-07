@@ -1,4 +1,5 @@
 import { FitAddon } from '@xterm/addon-fit'
+import { ImageAddon } from '@xterm/addon-image'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { useEffect, useRef } from 'react'
 import '@xterm/xterm/css/xterm.css'
@@ -58,6 +59,12 @@ export function Terminal({ code, onEnded, onRoster, onStatus }: Props) {
     })
     const fit = new FitAddon()
     term.loadAddon(fit)
+
+    // Inline images: SIXEL, iTerm's protocol, and the Kitty graphics protocol
+    // that terminal-browser and other screen-drawing tools need. Kitty support
+    // is only in the addon's 0.10 beta, which is why the xterm packages are
+    // pinned to beta versions.
+    term.loadAddon(new ImageAddon())
     term.open(node)
     fit.fit()
 
